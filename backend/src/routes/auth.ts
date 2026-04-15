@@ -1,9 +1,12 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
+import jwt, { SignOptions } from 'jsonwebtoken';
 import { z } from 'zod';
 import prisma from '../lib/prisma';
 import { authenticate, AuthRequest } from '../middleware/auth';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret';
+const JWT_OPTIONS: SignOptions = { expiresIn: (process.env.JWT_EXPIRES_IN || '7d') as SignOptions['expiresIn'] };
 
 const router = Router();
 
@@ -69,8 +72,8 @@ router.post('/register', async (req: Request, res: Response): Promise<void> => {
 
     const token = jwt.sign(
       { userId: user.id },
-      process.env.JWT_SECRET || 'fallback-secret',
-      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+      JWT_SECRET,
+      JWT_OPTIONS
     );
 
     res.status(201).json({ user, token });
@@ -101,8 +104,8 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
 
     const token = jwt.sign(
       { userId: user.id },
-      process.env.JWT_SECRET || 'fallback-secret',
-      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+      JWT_SECRET,
+      JWT_OPTIONS
     );
 
     res.json({
