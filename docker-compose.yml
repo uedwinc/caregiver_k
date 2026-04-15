@@ -30,6 +30,14 @@ services:
         condition: service_healthy
     volumes:
       - ./backend/uploads:/app/uploads
+    command: >
+      sh -c "
+        echo 'Waiting for postgres...' &&
+        sleep 3 &&
+        npx prisma db push --accept-data-loss &&
+        node dist/seed.js &&
+        node dist/index.js
+      "
 
 volumes:
   postgres_data:
