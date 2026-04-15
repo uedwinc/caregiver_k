@@ -1,0 +1,16 @@
+{
+  "name": "Caregiver Hub",
+  "short_name": "CareHub",
+  "description": "A shared command center for family caregiving",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563EB",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

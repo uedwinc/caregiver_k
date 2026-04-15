@@ -1,0 +1,476 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  phone        String?
+  passwordHash String
+  displayName  String
+  avatarUrl    String?
+  isAdmin      Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  careCircleMembers CareCircleMember[]
+  notifications     Notification[]
+  auditEvents       AuditEvent[]
+  invitationsSent   Invitation[]       @relation("InvitedBy")
+  sessions          Session[]
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model CareCircle {
+  id          String   @id @default(uuid())
+  name        String
+  ownerUserId String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members        CareCircleMember[]
+  careRecipients CareRecipient[]
+  notifications  Notification[]
+  auditEvents    AuditEvent[]
+  invitations    Invitation[]
+  subscription   Subscription?
+}
+
+model CareCircleMember {
+  id           String       @id @default(uuid())
+  careCircleId String
+  userId       String
+  role         MemberRole
+  status       MemberStatus @default(active)
+  displayName  String
+  phone        String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  careCircle       CareCircle    @relation(fields: [careCircleId], references: [id], onDelete: Cascade)
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ownedTasks       Task[]        @relation("TaskOwner")
+  backupTasks      Task[]        @relation("TaskBackup")
+  ridePlansDriver  RidePlan[]    @relation("RideDriver")
+  ridePlansBackup  RidePlan[]    @relation("RideBackup")
+  documentAccesses DocumentAccess[]
+
+  @@unique([careCircleId, userId])
+}
+
+model CareRecipient {
+  id            String   @id @default(uuid())
+  careCircleId  String
+  fullName      String
+  nickname      String?
+  dob           DateTime?
+  address       String?
+  notes         String?
+  mobilityNotes String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  careCircle    CareCircle     @relation(fields: [careCircleId], references: [id], onDelete: Cascade)
+  emergencyCard EmergencyCard?
+  medications   Medication[]
+  appointments  Appointment[]
+  tasks         Task[]
+  careLogEntries CareLogEntry[]
+  documents     Document[]
+  notifications Notification[]
+  auditEvents   AuditEvent[]
+}
+
+model EmergencyCard {
+  id                  String   @id @default(uuid())
+  careRecipientId     String   @unique
+  conditions          String?
+  allergies           String?
+  medicationsSummary  String?
+  primaryDoctorName   String?
+  primaryDoctorPhone  String?
+  preferredHospital   String?
+  insuranceProvider   String?
+  insuranceMemberId   String?
+  emergencyContacts   Json     @default("[]")
+  lastUpdatedAt       DateTime @updatedAt
+
+  careRecipient CareRecipient @relation(fields: [careRecipientId], references: [id], onDelete: Cascade)
+  shareLinks    EmergencyShareLink[]
+}
+
+model EmergencyShareLink {
+  id              String    @id @default(uuid())
+  emergencyCardId String
+  token           String    @unique
+  code            String
+  expiresAt       DateTime
+  createdByUserId String
+  disabled        Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+
+  emergencyCard EmergencyCard @relation(fields: [emergencyCardId], references: [id], onDelete: Cascade)
+  accessLogs    EmergencyShareAccess[]
+}
+
+model EmergencyShareAccess {
+  id         String   @id @default(uuid())
+  shareLinkId String
+  accessedAt DateTime @default(now())
+  ipAddress  String?
+  userAgent  String?
+
+  shareLink EmergencyShareLink @relation(fields: [shareLinkId], references: [id], onDelete: Cascade)
+}
+
+model Medication {
+  id              String         @id @default(uuid())
+  careRecipientId String
+  name            String
+  dosageText      String?
+  instructions    String?
+  scheduleType    ScheduleType   @default(daily)
+  timesPerDay     Int?
+  times           Json           @default("[]")
+  startDate       DateTime?
+  endDate         DateTime?
+  pharmacyName    String?
+  pharmacyPhone   String?
+  refillThreshold String?
+  currentSupply   Float?
+  supplyUnit      String?
+  status          MedStatus      @default(active)
+  createdBy       String
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  careRecipient CareRecipient  @relation(fields: [careRecipientId], references: [id], onDelete: Cascade)
+  logs          MedicationLog[]
+}
+
+model MedicationLog {
+  id           String      @id @default(uuid())
+  medicationId String
+  action       MedLogAction
+  scheduledFor DateTime?
+  takenAt      DateTime?
+  skippedAt    DateTime?
+  reason       String?
+  loggedBy     String
+  createdAt    DateTime    @default(now())
+
+  medication Medication @relation(fields: [medicationId], references: [id], onDelete: Cascade)
+}
+
+model Appointment {
+  id                    String            @id @default(uuid())
+  careRecipientId       String
+  title                 String
+  providerName          String?
+  locationName          String?
+  address               String?
+  startDateTime         DateTime
+  endDateTime           DateTime?
+  notes                 String?
+  prepChecklist         Json              @default("[]")
+  transportationNeeded  Boolean           @default(false)
+  status                AppointmentStatus @default(scheduled)
+  createdBy             String
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  careRecipient CareRecipient @relation(fields: [careRecipientId], references: [id], onDelete: Cascade)
+  ridePlan      RidePlan?
+}
+
+model RidePlan {
+  id                  String     @id @default(uuid())
+  appointmentId       String     @unique
+  driverMemberId      String
+  pickupTime          DateTime
+  pickupLocation      String?
+  dropoffLocation     String?
+  instructions        String?
+  backupDriverMemberId String?
+  status              RideStatus @default(planned)
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+
+  appointment   Appointment      @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  driver        CareCircleMember @relation("RideDriver", fields: [driverMemberId], references: [id])
+  backupDriver  CareCircleMember? @relation("RideBackup", fields: [backupDriverMemberId], references: [id])
+}
+
+model Task {
+  id              String         @id @default(uuid())
+  careRecipientId String
+  title           String
+  description     String?
+  dueDateTime     DateTime?
+  recurrenceRule  RecurrenceRule @default(none)
+  priority        TaskPriority   @default(medium)
+  status          TaskStatus     @default(open)
+  checklistItems  Json           @default("[]")
+  ownerMemberId   String?
+  backupMemberId  String?
+  completionNote  String?
+  createdBy       String
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  completedAt     DateTime?
+
+  careRecipient CareRecipient     @relation(fields: [careRecipientId], references: [id], onDelete: Cascade)
+  owner         CareCircleMember? @relation("TaskOwner", fields: [ownerMemberId], references: [id])
+  backup        CareCircleMember? @relation("TaskBackup", fields: [backupMemberId], references: [id])
+}
+
+model CareLogEntry {
+  id              String          @id @default(uuid())
+  careRecipientId String
+  type            CareLogType
+  title           String
+  body            String?
+  tags            Json            @default("[]")
+  attachments     Json            @default("[]")
+  visibility      String          @default("circle")
+  createdBy       String
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  careRecipient CareRecipient @relation(fields: [careRecipientId], references: [id], onDelete: Cascade)
+}
+
+model Document {
+  id               String           @id @default(uuid())
+  careRecipientId  String
+  category         DocumentCategory
+  title            String
+  fileUrl          String
+  fileType         String?
+  fileSize         Int?
+  uploadedBy       String
+  uploadedAt       DateTime         @default(now())
+  sensitivityLevel SensitivityLevel @default(normal)
+  pinnedToEmergency Boolean         @default(false)
+  updatedAt        DateTime         @updatedAt
+
+  careRecipient CareRecipient    @relation(fields: [careRecipientId], references: [id], onDelete: Cascade)
+  accessRules   DocumentAccess[]
+}
+
+model DocumentAccess {
+  id               String     @id @default(uuid())
+  documentId       String
+  accessType       AccessType
+  allowedRole      MemberRole?
+  allowedMemberId  String?
+  createdAt        DateTime   @default(now())
+
+  document      Document          @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  allowedMember CareCircleMember? @relation(fields: [allowedMemberId], references: [id])
+}
+
+model Notification {
+  id               String           @id @default(uuid())
+  userId           String
+  careCircleId     String
+  careRecipientId  String?
+  type             NotificationType
+  payload          Json             @default("{}")
+  readAt           DateTime?
+  createdAt        DateTime         @default(now())
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  careCircle    CareCircle     @relation(fields: [careCircleId], references: [id], onDelete: Cascade)
+  careRecipient CareRecipient? @relation(fields: [careRecipientId], references: [id])
+}
+
+model AuditEvent {
+  id               String      @id @default(uuid())
+  careCircleId     String
+  careRecipientId  String?
+  actorUserId      String
+  eventType        AuditAction
+  entityType       String
+  entityId         String
+  metadata         Json        @default("{}")
+  createdAt        DateTime    @default(now())
+
+  careCircle    CareCircle     @relation(fields: [careCircleId], references: [id], onDelete: Cascade)
+  careRecipient CareRecipient? @relation(fields: [careRecipientId], references: [id])
+  actor         User           @relation(fields: [actorUserId], references: [id])
+}
+
+model Invitation {
+  id             String           @id @default(uuid())
+  careCircleId   String
+  emailOrPhone   String
+  role           MemberRole
+  invitedByUserId String
+  status         InvitationStatus @default(pending)
+  token          String           @unique
+  expiresAt      DateTime
+  createdAt      DateTime         @default(now())
+
+  careCircle CareCircle @relation(fields: [careCircleId], references: [id], onDelete: Cascade)
+  invitedBy  User       @relation("InvitedBy", fields: [invitedByUserId], references: [id])
+}
+
+model Subscription {
+  id                 String             @id @default(uuid())
+  careCircleId       String             @unique
+  plan               SubscriptionPlan   @default(free)
+  status             SubscriptionStatus @default(active)
+  renewalDate        DateTime?
+  providerCustomerId String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  careCircle CareCircle @relation(fields: [careCircleId], references: [id], onDelete: Cascade)
+}
+
+// Enums
+enum MemberRole {
+  owner
+  family
+  helper
+  advisor
+}
+
+enum MemberStatus {
+  invited
+  active
+  suspended
+}
+
+enum ScheduleType {
+  daily
+  weekly
+  as_needed
+  custom
+}
+
+enum MedStatus {
+  active
+  inactive
+}
+
+enum MedLogAction {
+  taken
+  skipped
+  snoozed
+}
+
+enum AppointmentStatus {
+  scheduled
+  completed
+  canceled
+}
+
+enum RideStatus {
+  planned
+  confirmed
+  done
+}
+
+enum RecurrenceRule {
+  none
+  daily
+  weekly
+  monthly
+  custom
+}
+
+enum TaskPriority {
+  low
+  medium
+  high
+  urgent
+}
+
+enum TaskStatus {
+  open
+  in_progress
+  done
+}
+
+enum CareLogType {
+  note
+  symptom
+  vitals
+  med_change
+  incident
+  appointment_summary
+  insurance
+}
+
+enum DocumentCategory {
+  ID
+  Insurance
+  POA
+  Medical
+  Discharge
+  Other
+}
+
+enum SensitivityLevel {
+  normal
+  sensitive
+}
+
+enum AccessType {
+  role_based
+  member_specific
+}
+
+enum NotificationType {
+  task_due
+  med_due
+  refill
+  appointment
+  ride
+  emergency_share
+  daily_digest
+  invitation
+}
+
+enum AuditAction {
+  create
+  update
+  delete
+  view
+  share
+  download
+}
+
+enum InvitationStatus {
+  pending
+  accepted
+  expired
+  revoked
+}
+
+enum SubscriptionPlan {
+  free
+  premium
+}
+
+enum SubscriptionStatus {
+  active
+  canceled
+  past_due
+}
