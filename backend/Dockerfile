@@ -9,6 +9,8 @@ RUN npm run build
 FROM node:18-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+# Install OpenSSL 1.1 compatibility for Prisma engine
+RUN apk add --no-cache openssl libssl3
 COPY package*.json ./
 RUN npm install --omit=dev
 COPY --from=builder /app/dist ./dist
